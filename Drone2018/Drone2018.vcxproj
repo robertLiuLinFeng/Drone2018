@@ -69,7 +69,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>F:\VS_Project\source\repos\Drone2018\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)OpenCV_install\include;$(SolutionDir)OpenCV_install\include\opencv;$(SolutionDir)OpenCV_install\include\opencv2;$(SolutionDir)AirLib\include;$(SolutionDir)include;$(SolutionDir)AirLib\deps\MavLinkCom\include;$(SolutionDir)AirLib\deps\rpclib\include\rpc;$(SolutionDir)AirLib\deps\rpclib\include;$(SolutionDir)AirLib\include\Eigen;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)OpenCV_install\x64\vc14\lib;$(SolutionDir)AirLib\deps\rpclib\lib\x64\Release;$(SolutionDir)AirLib\deps\MavLinkCom\lib\x64\Release;$(SolutionDir)AirLib\lib\x64\Release;$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -111,6 +112,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>AirLib.lib;MavLinkCom.lib;rpc.lib;yolo_cpp_dll.lib;pthreadVC2.lib;cublas.lib;curand.lib;cudart.lib;$(SolutionDir)OpenCV_install\x64\vc14\lib\*340.lib;$(SolutionDir)OpenCV_install\x64\vc14\lib\*340d.lib;cudnn.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
