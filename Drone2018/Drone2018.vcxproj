@@ -116,7 +116,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\wgs_conversions\main.cpp" />
+    <ClCompile Include="..\src\my_Drone.cpp" />
+    <ClCompile Include="..\src\PID.cpp" />
+    <ClCompile Include="..\src\PIDController.cpp" />
+    <ClCompile Include="..\src\wgs_conversions\main.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\src\wgs_conversions\wgs_conversions.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
