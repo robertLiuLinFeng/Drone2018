@@ -106,19 +106,24 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_USE_MATH_DEFINES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_USE_MATH_DEFINES;NDEBUG;_CONSOLE;_TIMESPEC_DEFINED;OPENCV;CUDNN;GPU;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>
+      </SubSystem>
       <AdditionalDependencies>AirLib.lib;MavLinkCom.lib;rpc.lib;yolo_cpp_dll.lib;pthreadVC2.lib;cublas.lib;curand.lib;cudart.lib;$(SolutionDir)OpenCV_install\x64\vc14\lib\*340.lib;$(SolutionDir)OpenCV_install\x64\vc14\lib\*340d.lib;cudnn.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\src\my_Drone.cpp" />
-    <ClCompile Include="..\src\PID.cpp" />
-    <ClCompile Include="..\src\PIDController.cpp" />
+    <ClCompile Include="..\src\PID.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\src\PIDController.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\src\wgs_conversions\main.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
