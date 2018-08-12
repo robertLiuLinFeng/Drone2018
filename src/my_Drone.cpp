@@ -8,10 +8,11 @@
 #include "WINDOWS.h"
 
 #include "timer.h" 
-#include <pthread.h>
+//#include <pthread.h>
+#include <thread>
 
 //命名空间
-//using namespace std;
+using namespace std;
 using namespace cv;
 using namespace msr::airlib;
 
@@ -22,12 +23,10 @@ typedef ImageCaptureBase::ImageResponse ImageResponse;
 typedef ImageCaptureBase::ImageType ImageType;
 
 //线程
-DWORD WINAPI Key_Scan(LPVOID pVoid);//__stdcall 函数在返回到调用者之前将参数从栈中删除
-DWORD WINAPI get_img(LPVOID pVoid);
-DWORD WINAPI Control_Z_Thread(LPVOID pVoid);//控制四轴高度
-HANDLE hTimer1;
-pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;//互斥锁					
-
+HANDLE hTimer1;//定时器
+static std::mutex g_mutex;//互斥锁
+void Key_Scan(void);
+void get_img(void);
 //按键
 volatile int key_value_cv = -1;
 static int key_control(int key);//按键控制
@@ -35,6 +34,8 @@ static int key_control(int key);//按键控制
 //图像
 cv::Mat front_image, down_image,test_image;
 
+//全局标志位
+bool flag_exit = 0;//如果未true则表示推出程序
 int main()
 {
 	while (RpcLibClientBase::ConnectionState::Connected != client.getConnectionState())
@@ -52,57 +53,38 @@ int main()
 	//设置定时器时间
 	INT64 nDueTime = -0 * _SECOND;//定时器生效时间，立即
 	SetWaitableTimer(hTimer1, (PLARGE_INTEGER)&nDueTime, 50, NULL, NULL, FALSE);//50表示定时器周期50ms
-																				//DWORD nThreadID = 0;
-	HANDLE hThread1 = CreateThread(NULL, 0, Key_Scan, NULL, 0, NULL);// &nThreadID);
-	HANDLE hThread2 = CreateThread(NULL, 0, get_img, NULL, 0, NULL);// &nThreadID);
-	HANDLE hThread3 = CreateThread(NULL, 0, Control_Z_Thread, NULL, 0, NULL);// &nThreadID);
 
-	while (true)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(20));//
-
-		if (-1 != key_value_cv)//如果有按键按下
-		{
-			if (-1 == key_control(key_value_cv))
-			{
-				//摧毁所有OpenCV窗口
-				cv::destroyAllWindows();
-				//关闭线程
-				CloseHandle(hThread1);
-				CloseHandle(hThread2);
-				CloseHandle(hThread3);
-				//关闭定时器
-				CloseHandle(hTimer1);
-
-				return 0;
-			}
-		}
-	}
-
-	//等待线程返回
-	WaitForSingleObject(hThread1, INFINITE);
-	WaitForSingleObject(hThread2, INFINITE);
-	CloseHandle(hThread1);
-	CloseHandle(hThread2);
-	CloseHandle(hThread3);
+	printf("线程初始化\n");
+	std::thread t_Key_Scan(Key_Scan);
+	std::thread t_get_img(get_img);
+	
+	printf("线程初始化完成\n");
+	//t_get_img.detach();
+	//t_Key_Scan.detach();
+	t_get_img.join();//阻塞，等待该线程退出
+	t_Key_Scan.join();
 	//关闭定时器
 	CloseHandle(hTimer1);
+	//摧毁所有OpenCV窗口
+	cv::destroyAllWindows();
+	
+	printf("所有线程退出，程序结束\n");
 	return 0;
 }
 
+//
+//DWORD WINAPI Control_Z_Thread(LPVOID pVoid)
+//{
+//	int i = 0;
+//	while (true)
+//	{
+//		//等待定时器时间到达
+//		WaitForSingleObject(hTimer1, INFINITE);
+//	}
+//
+//}
 
-DWORD WINAPI Control_Z_Thread(LPVOID pVoid)
-{
-	int i = 0;
-	while (true)
-	{
-		//等待定时器时间到达
-		WaitForSingleObject(hTimer1, INFINITE);
-	}
-
-}
-
-DWORD WINAPI Key_Scan(LPVOID pVoid)
+void Key_Scan(void)
 {
 	clock_t time_1;// = clock();//get time
 	
@@ -110,10 +92,13 @@ DWORD WINAPI Key_Scan(LPVOID pVoid)
 	{
 		//等待定时器时间到达
 		WaitForSingleObject(hTimer1, INFINITE);
-
-		pthread_mutex_lock(&mutex1);//获得锁
+		if (flag_exit)//退出线程
+		{
+			return;
+		}
 
 		//显示图像
+		g_mutex.lock();//锁
 		if (!front_image.empty())
 		{
 			cv::imshow("FROWARD", front_image);
@@ -122,7 +107,7 @@ DWORD WINAPI Key_Scan(LPVOID pVoid)
 		{
 			cv::imshow("DOWN", down_image);
 		}
-
+		g_mutex.unlock();//释放锁
 		//按键扫描
 		if (-1 == key_value_cv)
 		{
@@ -134,13 +119,16 @@ DWORD WINAPI Key_Scan(LPVOID pVoid)
 		}
 
 		while (-1 != cv::waitKey(1));//把缓冲区读完后，才会显示1ms图像
+		key_control(key_value_cv);//执行按键功能
 
-		pthread_mutex_unlock(&mutex1);//释放锁
+		//g_mutex.unlock();//释放锁
+		
+		
 	}
-	return 0;
+	
 }
 
-DWORD WINAPI get_img(LPVOID pVoid)
+void get_img(void)
 {
 	int i = 0;
 	clock_t time_1;// = clock();//get time
@@ -149,36 +137,48 @@ DWORD WINAPI get_img(LPVOID pVoid)
 	{
 		//等待定时器时间到达
 		WaitForSingleObject(hTimer1, INFINITE);
-
-		pthread_mutex_lock(&mutex1);//获得锁
+		if (flag_exit)//退出线程
+		{
+			return;
+		}
+		//g_mutex.lock();//获得锁
 		if (++i >= 6)//50*6=300ms执行一次
 		{
 			i = 0;
 			time_1 = clock();//get time
 
-			std::vector<ImageRequest> request;
-			request = { ImageRequest(0, ImageType::Scene) , ImageRequest(0, ImageType::DepthPerspective, true), ImageRequest(3, ImageType::Scene) };
+			std::vector<ImageRequest> request = { ImageRequest(0, ImageType::Scene) , ImageRequest(0, ImageType::DepthPerspective, true), ImageRequest(3, ImageType::Scene) };
 
 			std::vector<ImageResponse>& response = client.simGetImages(request);
 
 			if (response.size() > 0)
 			{
+
+				//仅仅是改变指针指向，不是image copy，所以不用加锁
+				g_mutex.lock();//锁
 				front_image = cv::imdecode(response.at(0).image_data_uint8, cv::IMREAD_COLOR);	//;前视图
 				down_image = cv::imdecode(response.at(2).image_data_uint8, cv::IMREAD_COLOR);	//下视图	
+				g_mutex.unlock();//释放锁
 			}
 		}
-		pthread_mutex_unlock(&mutex1);//释放锁
+		//g_mutex.unlock();//释放锁
 	}
-	return 0;
+	
 }
 
 static int key_control(int key)//按键控制
 {
 	clock_t time_1;// = clock();//get time
 
-	pthread_mutex_lock(&mutex1);//获得锁
 	switch (key)
 	{
+	case 27://ESC
+		flag_exit = true;//退出标志位置位
+		break;
+	case 32://空格
+		client.hover();//hover模式
+		printf("hover\n");
+		break;
 	case 'w':
 		client.moveByAngleThrottle(0.0f, 0.0f, 0.7f, 0.0f, 0.2f);
 		break;
@@ -210,7 +210,6 @@ static int key_control(int key)//按键控制
 	}
 
 	key_value_cv = -1;
-	pthread_mutex_unlock(&mutex1);//释放锁
 	return 0;
 }
 
