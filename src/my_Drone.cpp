@@ -30,14 +30,15 @@ msr::airlib::MultirotorRpcLibClient client("localhost", 41451, 60000);//连接loca
 BarometerData	 Barometer_data;	//气压计
 MagnetometerData Magnetometer_data;	//磁力计
 ImuData			 Imu_data;			//IMU
-static std::mutex g_mutex_img;//互斥锁
-static std::mutex g_mutex_sensor;//传感器数据互斥锁，用于气压计、磁力计、IMU数据
-static std::mutex g_mutex_control_cmd;//控制命令数据锁
+std::mutex g_mutex_img;//互斥锁
+std::mutex g_mutex_sensor;//传感器数据互斥锁，用于气压计、磁力计、IMU数据
+std::mutex g_mutex_control_cmd;//控制命令数据锁
 int avoid_obstacle_flag = 0; //避障标志
 
 int flag_mode = 1;//  1表示任务1钻圈，2表示任务2小树林
 
-
+//图像
+cv::Mat front_image, down_image, depth_image;
 
 // A 共享变量 ****************************************//
 
@@ -54,20 +55,17 @@ HANDLE hTimer_Key_Scan = CreateWaitableTimer(NULL, FALSE, NULL);
 HANDLE hTimer_get_img = CreateWaitableTimer(NULL, FALSE, NULL);
 HANDLE hTimer_get_sensor = CreateWaitableTimer(NULL, FALSE, NULL);
 HANDLE hTimer_move_control = CreateWaitableTimer(NULL, FALSE, NULL);
-
+//线程函数声明
 void Key_Scan(void);
 void get_img(void);
 void get_sensor(void);//获取传感器数据
 void move_control(void);//移动控制线程
-//按键
-volatile int key_value_cv = -1;
-static int key_control(int key);//按键控制
 
-//图像
-cv::Mat front_image, down_image, depth_image;
+
+static int key_control(int key);//按键控制函数声明
 
 //全局标志位
-bool flag_exit = 0;//如果未true则表示推出程序
+static bool flag_exit = 0;//如果未true则表示推出程序
 
 int main()
 {
@@ -77,10 +75,8 @@ int main()
 	while (!client.isApiControlEnabled())
 		client.enableApiControl(true);//获取api控制
 
-	client.armDisarm(true);//解锁飞控
-						  
+	client.armDisarm(true);//解锁飞控	  
 	client.hover();//hover模式
-	
 	
 	//设置定时器时间
 	INT64 nDueTime = -0 * _SECOND;//定时器生效时间，立即
@@ -116,6 +112,7 @@ int main()
 
 void Key_Scan(void)
 {
+	int key_value_cv = -1;
 	clock_t time_1 = clock();//get time
 	
 	while (true)
@@ -144,18 +141,10 @@ void Key_Scan(void)
 			cv::imshow("FROWARD_DEPTH", depth_image);
 		}
 		g_mutex_img.unlock();//释放锁
-		//按键扫描
-		if (-1 == key_value_cv)
-		{
-			key_value_cv = cv::waitKeyEx(1);
-		}
-		else
-		{
-			cv::waitKey(1);
-		}
 
-		while (-1 != cv::waitKey(1));//把缓冲区读完后，才会显示1ms图像
-		key_control(key_value_cv);//执行按键功能
+		key_value_cv = cv::waitKeyEx(1);//读取按键
+		while (-1 != cv::waitKey(1));	//显示图像，要把缓冲区读完后，才会显示1ms图像
+		key_control(key_value_cv);		//执行按键功能
 	
 	}
 	
@@ -203,9 +192,11 @@ void get_img(void)
 		default:
 		case 1://任务1 钻圈
 			
+			//调用 钻圈函数();
 			break;
 		case 2://任务2 小树林
 			
+			//调用 小树林搜索函数();
 			break;
 		}
 
@@ -252,14 +243,7 @@ void move_control(void)//移动控制线程
 {
 	clock_t time_1= clock();//get time
 	
-
-	//float roll = 0.0f;//绕x轴逆时针 //单位是弧度
-	//float pitch = 0.0f;//绕y轴逆时针  
-	float yaw = 0.0f; //绕z轴逆时针
-	//float duration = 0.05f;//持续时间
 	float throttle = 0.587402f;//刚好抵消重力时的油门
-	
-
 	struct control_cmd control_cmdset_temp;
 	while (true)
 	{
@@ -390,7 +374,7 @@ static int key_control(int key)//按键控制
 		flag = false;
 		client.moveByAngleThrottle(pitch, roll, throttle, yaw_rate, duration);
 	}
-	key_value_cv = -1;
+
 	return 0;
 }
 
