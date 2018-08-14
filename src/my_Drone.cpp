@@ -56,6 +56,7 @@ HANDLE hTimer_move_control = CreateWaitableTimer(NULL, FALSE, NULL);
 void Key_Scan(void);
 void get_img(void);
 void get_sensor(void);//获取传感器数据
+void move_control(void);//移动控制线程
 //按键
 volatile int key_value_cv = -1;
 static int key_control(int key);//按键控制
@@ -218,6 +219,11 @@ void move_control(void)//移动控制线程
 {
 	clock_t time_1= clock();//get time
 	
+	int flag_move = 0;// 0是停止，1是pitch/roll模式移动，2是inclination/orientation模式移动
+	float pitch = .0f, roll = .0f;
+	float inclination = .0f, orientation = .0f;
+	float duration = .05f;				//持续时间
+	float set_H = .0f;//设定高度
 
 	while (true)
 	{
