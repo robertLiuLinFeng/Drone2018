@@ -33,6 +33,9 @@ static std::mutex g_mutex_img;//互斥锁
 static std::mutex g_mutex_sensor;//传感器数据互斥锁，用于气压计、磁力计、IMU数据
 int avoid_obstacle_flag = 0; //避障标志
 
+int flag_mode = 1;//  1表示任务1钻圈，2表示任务2小树林
+
+
 
 // A 共享变量 ****************************************//
 
@@ -48,6 +51,8 @@ int avoid_obstacle_flag = 0; //避障标志
 HANDLE hTimer_Key_Scan = CreateWaitableTimer(NULL, FALSE, NULL);
 HANDLE hTimer_get_img = CreateWaitableTimer(NULL, FALSE, NULL);
 HANDLE hTimer_get_sensor = CreateWaitableTimer(NULL, FALSE, NULL);
+HANDLE hTimer_move_control = CreateWaitableTimer(NULL, FALSE, NULL);
+
 void Key_Scan(void);
 void get_img(void);
 void get_sensor(void);//获取传感器数据
@@ -79,19 +84,25 @@ int main()
 	SetWaitableTimer(hTimer_Key_Scan, (PLARGE_INTEGER)&nDueTime, 50, NULL, NULL, FALSE);//50表示定时器周期50ms
 	SetWaitableTimer(hTimer_get_img, (PLARGE_INTEGER)&nDueTime, 400, NULL, NULL, FALSE);//50表示定时器周期50ms
 	SetWaitableTimer(hTimer_get_sensor, (PLARGE_INTEGER)&nDueTime, 50, NULL, NULL, FALSE);//50表示定时器周期50ms
+	SetWaitableTimer(hTimer_move_control, (PLARGE_INTEGER)&nDueTime, 50, NULL, NULL, FALSE);//50表示定时器周期50ms
+	
 	printf("线程初始化\n");
 	std::thread t_Key_Scan(Key_Scan);
 	std::thread t_get_img(get_img);
 	std::thread t_get_sensor(get_sensor);
-	
+	std::thread t_move_control(move_control);
+
 	printf("线程初始化完成\n");
 	t_Key_Scan.join(); //阻塞，等待该线程退出
 	t_get_img.join();
 	t_get_sensor.join();
+	t_move_control.join();
 	//关闭定时器
 	CloseHandle(hTimer_Key_Scan);
 	CloseHandle(hTimer_get_img);
 	CloseHandle(hTimer_get_sensor);
+	CloseHandle(hTimer_move_control);
+	
 	//摧毁所有OpenCV窗口
 	cv::destroyAllWindows();
 	
@@ -99,17 +110,6 @@ int main()
 	return 0;
 }
 
-//
-//DWORD WINAPI Control_Z_Thread(LPVOID pVoid)
-//{
-//	int i = 0;
-//	while (true)
-//	{
-//		//等待定时器时间到达
-//		WaitForSingleObject(hTimer1, INFINITE);
-//	}
-//
-//}
 
 void Key_Scan(void)
 {
@@ -166,8 +166,7 @@ void get_img(void)
 	std::vector<ImageRequest> request = { ImageRequest(0, ImageType::Scene) , ImageRequest(0, ImageType::DepthPerspective, true), ImageRequest(3, ImageType::Scene) };
 	while (true)
 	{
-		
-		
+
 		//等待定时器时间到达
 		WaitForSingleObject(hTimer_get_img, INFINITE);
 
@@ -192,10 +191,51 @@ void get_img(void)
 		}
 
 		//printf("    get_img耗时:%d ms\n", clock() - time_1);
+
+
+
+
+
+		switch (flag_mode)//任务1和任务2
+		{
+		default:
+		case 1://任务1 钻圈
+			
+			break;
+		case 2://任务2 小树林
+			
+			break;
+		}
+
+
+
+
 	}
 	
 }
 
+void move_control(void)//移动控制线程
+{
+	clock_t time_1= clock();//get time
+	
+
+	while (true)
+	{
+		float roll = 0.0f;//绕x轴逆时针 //单位是弧度
+		float pitch = 0.0f;//绕y轴逆时针  
+		float yaw = 0.0f; //绕z轴逆时针
+		float duration = 0.05f;//持续时间
+		float throttle = 0.587402f;//刚好抵消重力时的油门
+		float yaw_rate = 0.0f;
+
+		//等待定时器时间到达
+		WaitForSingleObject(hTimer_move_control, INFINITE);
+	
+	
+	}
+
+
+}
 static int key_control(int key)//按键控制
 {
 	clock_t time_1;// = clock();//get time
@@ -300,17 +340,13 @@ void get_sensor(void)//获取传感器数据
 		{
 			return;
 		}
-		
 
 		//更新传感器数据
 		g_mutex_sensor.lock();//传感器数据锁
 		Barometer_data = client.getBarometerdata();
 		Magnetometer_data = client.getMagnetometerdata();
 		Imu_data = client.getImudata();
-		g_mutex_sensor.unlock();//传感器数据锁释放
-		
-		
-		
+		g_mutex_sensor.unlock();//传感器数据锁释放	
 	}
 }
 
