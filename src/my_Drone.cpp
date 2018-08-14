@@ -1,3 +1,4 @@
+#include "main.hpp"
 //airsim
 #include "vehicles/multirotor/api/MultirotorRpcLibClient.hpp"
 #include "api/RpcLibClientBase.hpp"
@@ -29,13 +30,15 @@ msr::airlib::MultirotorRpcLibClient client("localhost", 41451, 60000);//连接loca
 BarometerData	 Barometer_data;	//气压计
 MagnetometerData Magnetometer_data;	//磁力计
 ImuData			 Imu_data;			//IMU
-static std::mutex g_mutex_img;//互斥锁
-static std::mutex g_mutex_sensor;//传感器数据互斥锁，用于气压计、磁力计、IMU数据
+std::mutex g_mutex_img;//互斥锁
+std::mutex g_mutex_sensor;//传感器数据互斥锁，用于气压计、磁力计、IMU数据
+std::mutex g_mutex_control_cmd;//控制命令数据锁
 int avoid_obstacle_flag = 0; //避障标志
 
 int flag_mode = 1;//  1表示任务1钻圈，2表示任务2小树林
 
-
+//图像
+cv::Mat front_image, down_image, depth_image;
 
 // A 共享变量 ****************************************//
 
@@ -52,20 +55,17 @@ HANDLE hTimer_Key_Scan = CreateWaitableTimer(NULL, FALSE, NULL);
 HANDLE hTimer_get_img = CreateWaitableTimer(NULL, FALSE, NULL);
 HANDLE hTimer_get_sensor = CreateWaitableTimer(NULL, FALSE, NULL);
 HANDLE hTimer_move_control = CreateWaitableTimer(NULL, FALSE, NULL);
-
+//线程函数声明
 void Key_Scan(void);
 void get_img(void);
 void get_sensor(void);//获取传感器数据
 void move_control(void);//移动控制线程
-//按键
-volatile int key_value_cv = -1;
-static int key_control(int key);//按键控制
 
-//图像
-cv::Mat front_image, down_image, depth_image;
+
+static int key_control(int key);//按键控制函数声明
 
 //全局标志位
-bool flag_exit = 0;//如果未true则表示推出程序
+static bool flag_exit = 0;//如果未true则表示推出程序
 
 int main()
 {
@@ -75,10 +75,8 @@ int main()
 	while (!client.isApiControlEnabled())
 		client.enableApiControl(true);//获取api控制
 
-	client.armDisarm(true);//解锁飞控
-						  
+	client.armDisarm(true);//解锁飞控	  
 	client.hover();//hover模式
-	
 	
 	//设置定时器时间
 	INT64 nDueTime = -0 * _SECOND;//定时器生效时间，立即
@@ -114,6 +112,7 @@ int main()
 
 void Key_Scan(void)
 {
+	int key_value_cv = -1;
 	clock_t time_1 = clock();//get time
 	
 	while (true)
@@ -142,18 +141,10 @@ void Key_Scan(void)
 			cv::imshow("FROWARD_DEPTH", depth_image);
 		}
 		g_mutex_img.unlock();//释放锁
-		//按键扫描
-		if (-1 == key_value_cv)
-		{
-			key_value_cv = cv::waitKeyEx(1);
-		}
-		else
-		{
-			cv::waitKey(1);
-		}
 
-		while (-1 != cv::waitKey(1));//把缓冲区读完后，才会显示1ms图像
-		key_control(key_value_cv);//执行按键功能
+		key_value_cv = cv::waitKeyEx(1);//读取按键
+		while (-1 != cv::waitKey(1));	//显示图像，要把缓冲区读完后，才会显示1ms图像
+		key_control(key_value_cv);		//执行按键功能
 	
 	}
 	
@@ -193,8 +184,7 @@ void get_img(void)
 
 		//printf("    get_img耗时:%d ms\n", clock() - time_1);
 
-
-
+// 分割线 ***************************************************************************************************
 
 
 		switch (flag_mode)//任务1和任务2
@@ -202,42 +192,108 @@ void get_img(void)
 		default:
 		case 1://任务1 钻圈
 			
+			//调用 钻圈函数();
 			break;
 		case 2://任务2 小树林
 			
+			//调用 小树林搜索函数();
 			break;
 		}
-
-
 
 
 	}
 	
 }
 
-void move_control(void)//移动控制线程
-{
-	clock_t time_1= clock();//get time
-	
-	int flag_move = 0;// 0是停止，1是pitch/roll模式移动，2是inclination/orientation模式移动
+struct control_cmd {
+	bool flag_enable = false;//true表示该指令没执行过,需要执行一次
+	int flag_move = 0;// 0是停止，1是pitch/roll模式移动，2是inclination/orientation模式移动，3是设定高度
 	float pitch = .0f, roll = .0f;
 	float inclination = .0f, orientation = .0f;
 	float duration = .05f;				//持续时间
 	float set_H = .0f;//设定高度
+	float yaw_rate = 0.0f;
 
+};//放头文件里
+struct control_cmd control_cmdset;
+bool flag_H = false;//指示顶高是否完成，ture表示定高完成
+//设置控制命令
+//void set_control_cmd(bool flag_enable=true, int flag_move=0, float pitch = .0f, float roll = .0f,
+//					 float inclination = .0f, float orientation = .0f, float duration=0.05f, 
+//					 float set_H = .0f, float yaw_rate = 0.0f)
+void set_control_cmd(bool flag_enable, int flag_move, float pitch, float roll,
+					 float inclination, float orientation, float duration,
+					 float set_H, float yaw_rate)
+{
+	g_mutex_control_cmd.lock();//加锁
+
+	control_cmdset.flag_enable		= flag_enable;
+	control_cmdset.flag_move		= flag_move;
+	control_cmdset.pitch			= pitch;
+	control_cmdset.roll				= roll;
+	control_cmdset.inclination		= inclination;
+	control_cmdset.orientation		= orientation;
+	control_cmdset.duration			= duration;
+	control_cmdset.set_H			= set_H;
+	control_cmdset.yaw_rate			= yaw_rate;
+
+	g_mutex_control_cmd.unlock();//释放锁
+}
+void move_control(void)//移动控制线程
+{
+	clock_t time_1= clock();//get time
+	
+	float throttle = 0.587402f;//刚好抵消重力时的油门
+	struct control_cmd control_cmdset_temp;
 	while (true)
 	{
-		float roll = 0.0f;//绕x轴逆时针 //单位是弧度
-		float pitch = 0.0f;//绕y轴逆时针  
-		float yaw = 0.0f; //绕z轴逆时针
-		float duration = 0.05f;//持续时间
-		float throttle = 0.587402f;//刚好抵消重力时的油门
-		float yaw_rate = 0.0f;
-
 		//等待定时器时间到达
 		WaitForSingleObject(hTimer_move_control, INFINITE);
-	
-	
+		if (flag_exit)//退出线程
+		{
+			return;
+		}
+
+		
+		
+		g_mutex_control_cmd.lock();//加锁
+		control_cmdset_temp.flag_enable		= control_cmdset.flag_enable;
+		control_cmdset_temp.flag_move		= control_cmdset.flag_move;
+		control_cmdset_temp.pitch			= control_cmdset.pitch;
+		control_cmdset_temp.roll			= control_cmdset.roll;
+		control_cmdset_temp.inclination		= control_cmdset.inclination;
+		control_cmdset_temp.orientation		= control_cmdset.orientation;
+		control_cmdset_temp.duration		= control_cmdset.duration;
+		control_cmdset_temp.set_H			= control_cmdset.set_H;
+		control_cmdset_temp.yaw_rate		= control_cmdset.yaw_rate;
+
+		control_cmdset.flag_enable = false;
+		g_mutex_control_cmd.unlock();//释放锁
+		if (control_cmdset_temp.flag_enable)
+		{
+			switch (control_cmdset_temp.flag_move)
+			{
+			default:
+			case 0:// 0是停止
+				client.hover();//hover
+				break;
+			case 1://1是pitch/roll模式移动
+				client.hover();//hover
+				throttle = 0.587402f / cos(control_cmdset_temp.pitch) / cos(control_cmdset_temp.roll);
+				client.moveByAngleThrottle(control_cmdset_temp.pitch, control_cmdset_temp.roll, throttle, control_cmdset_temp.yaw_rate, control_cmdset_temp.duration);
+				break;
+			case 2://2是inclination / orientation模式移动
+				break;
+			case 3://3是设定高度
+				client.hover();//hover
+				// 控制高度函数();
+				//
+				//
+				//
+				//
+				break;
+			}
+		}
 	}
 
 
@@ -268,7 +324,7 @@ static int key_control(int key)//按键控制
 	case 32://空格
 		client.hover();//hover模式
 		printf("hover\n");
-		flag = true;
+		//flag = true;
 		break;
 	case 'w':
 		flag = true;
@@ -279,36 +335,25 @@ static int key_control(int key)//按键控制
 		throttle -= 0.1f;
 		break;
 	case 'a'://旋转时会下降...
-		flag = true;
-		yaw_rate = -0.7f;
+		set_control_cmd(true, 1, .0f, .0f, .0f, .0f, 0.05f, .0f, -0.7f);
 		break;
 	case 'd':
-		flag = true;
-		yaw_rate = 0.7f;
+		set_control_cmd(true, 1, .0f, .0f, .0f, .0f, 0.05f, .0f, 0.7f);
 		break;
 
 	//下面是以机头方向前后左右
 	case 'i'://pitch y轴逆时针角度
-		flag = true;
-		pitch = -0.1f;//绕y轴逆时针
-		throttle = throttle/cos(pitch)/cos(roll);//刚好抵消重力时的油门
+		set_control_cmd(true, 1, -0.1f, .0f, .0f, .0f, 0.05f, .0f, .0f);
 		break;
 	case 'k'://pitch y轴逆时针角度
-		flag = true;
-		pitch = 0.1f;//绕y轴逆时针
-		throttle = throttle / cos(pitch) / cos(roll);//刚好抵消重力时的油门
+		set_control_cmd(true, 1, 0.1f, .0f, .0f, .0f, 0.05f, .0f, .0f);
 
 		break;
 	case 'j'://roll x轴逆时针角度
-		flag = true;
-		roll = -0.1f;//绕y轴逆时针
-		throttle = throttle / cos(pitch) / cos(roll);//刚好抵消重力时的油门
-
+		set_control_cmd(true, 1, .0f, -0.1f, .0f, .0f, 0.05f, .0f, .0f);
 		break;
 	case 'l'://roll x轴逆时针角度
-		flag = true;
-		roll = 0.1;//绕y轴逆时针
-		throttle = throttle / cos(pitch) / cos(roll);//刚好抵消重力时的油门
+		set_control_cmd(true, 1, .0f, 0.1f, .0f, .0f, 0.05f, .0f, .0f);
 		break;
 	case 2490368://方向键上
 		throttle += 0.0003f;
@@ -323,13 +368,13 @@ static int key_control(int key)//按键控制
 	default:
 		break;
 	}
+
 	if (flag)
 	{
 		flag = false;
 		client.moveByAngleThrottle(pitch, roll, throttle, yaw_rate, duration);
 	}
-	
-	key_value_cv = -1;
+
 	return 0;
 }
 
