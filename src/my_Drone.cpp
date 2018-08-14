@@ -1,3 +1,4 @@
+#include "main.hpp"
 //airsim
 #include "vehicles/multirotor/api/MultirotorRpcLibClient.hpp"
 #include "api/RpcLibClientBase.hpp"
@@ -31,6 +32,7 @@ MagnetometerData Magnetometer_data;	//磁力计
 ImuData			 Imu_data;			//IMU
 static std::mutex g_mutex_img;//互斥锁
 static std::mutex g_mutex_sensor;//传感器数据互斥锁，用于气压计、磁力计、IMU数据
+static std::mutex g_mutex_control_cmd;//控制命令数据锁
 int avoid_obstacle_flag = 0; //避障标志
 
 int flag_mode = 1;//  1表示任务1钻圈，2表示任务2小树林
@@ -193,7 +195,7 @@ void get_img(void)
 
 		//printf("    get_img耗时:%d ms\n", clock() - time_1);
 
-
+// 分割线 ***************************************************************************************************
 
 
 
@@ -215,29 +217,89 @@ void get_img(void)
 	
 }
 
-void move_control(void)//移动控制线程
-{
-	clock_t time_1= clock();//get time
-	
-	int flag_move = 0;// 0是停止，1是pitch/roll模式移动，2是inclination/orientation模式移动
+struct control_cmd {
+	bool flag_enable = false;//true表示该指令没执行过,需要执行一次
+	int flag_move = 0;// 0是停止，1是pitch/roll模式移动，2是inclination/orientation模式移动，3是设定高度
 	float pitch = .0f, roll = .0f;
 	float inclination = .0f, orientation = .0f;
 	float duration = .05f;				//持续时间
 	float set_H = .0f;//设定高度
+	float yaw_rate = 0.0f;
 
+};//放头文件里
+struct control_cmd control_cmdset;
+bool flag_H = false;//指示顶高是否完成，ture表示定高完成
+//设置控制命令
+void set_control_cmd(bool flag_enable=true, int flag_move=0, float pitch = .0f, float roll = .0f,
+					 float inclination = .0f, float orientation = .0f, float duration=0.05f, 
+					 float set_H = .0f, float yaw_rate = 0.0f)
+{
+	g_mutex_control_cmd.lock();//加锁
+
+	control_cmdset.flag_enable		= flag_enable;
+	control_cmdset.flag_move		= flag_move;
+	control_cmdset.pitch			= pitch;
+	control_cmdset.roll				= roll;
+	control_cmdset.inclination		= inclination;
+	control_cmdset.orientation		= orientation;
+	control_cmdset.duration			= duration;
+	control_cmdset.set_H			= set_H;
+	control_cmdset.yaw_rate			= yaw_rate;
+
+	g_mutex_control_cmd.unlock();//释放锁
+}
+void move_control(void)//移动控制线程
+{
+	clock_t time_1= clock();//get time
+	
+
+	//float roll = 0.0f;//绕x轴逆时针 //单位是弧度
+	//float pitch = 0.0f;//绕y轴逆时针  
+	float yaw = 0.0f; //绕z轴逆时针
+	//float duration = 0.05f;//持续时间
+	float throttle = 0.587402f;//刚好抵消重力时的油门
+	
+
+	struct control_cmd control_cmdset_temp;
 	while (true)
 	{
-		float roll = 0.0f;//绕x轴逆时针 //单位是弧度
-		float pitch = 0.0f;//绕y轴逆时针  
-		float yaw = 0.0f; //绕z轴逆时针
-		float duration = 0.05f;//持续时间
-		float throttle = 0.587402f;//刚好抵消重力时的油门
-		float yaw_rate = 0.0f;
-
 		//等待定时器时间到达
 		WaitForSingleObject(hTimer_move_control, INFINITE);
-	
-	
+		if (flag_exit)//退出线程
+		{
+			return;
+		}
+		g_mutex_control_cmd.lock();//加锁
+		control_cmdset_temp.flag_enable		= control_cmdset.flag_enable;
+		control_cmdset_temp.flag_move		= control_cmdset.flag_move;
+		control_cmdset_temp.pitch			= control_cmdset.pitch;
+		control_cmdset_temp.roll			= control_cmdset.roll;
+		control_cmdset_temp.inclination		= control_cmdset.inclination;
+		control_cmdset_temp.orientation		= control_cmdset.orientation;
+		control_cmdset_temp.duration		= control_cmdset.duration;
+		control_cmdset_temp.set_H			= control_cmdset.set_H;
+		control_cmdset_temp.yaw_rate		= control_cmdset.yaw_rate;
+
+		control_cmdset.flag_enable = false;
+		g_mutex_control_cmd.unlock();//释放锁
+		if (control_cmdset_temp.flag_enable)
+		{
+			switch (control_cmdset_temp.flag_move)
+			{
+			default:
+			case 0:// 0是停止
+				client.hover();//hover
+				break;
+			case 1://1是pitch/roll模式移动
+				throttle = throttle / cos(control_cmdset_temp.pitch) / cos(control_cmdset_temp.roll);
+				client.moveByAngleThrottle(control_cmdset_temp.pitch, control_cmdset_temp.roll, throttle, control_cmdset_temp.yaw_rate, control_cmdset_temp.duration);
+				break;
+			case 2://2是inclination / orientation模式移动
+				break;
+			case 3://3是设定高度
+				break;
+			}
+		}
 	}
 
 
@@ -255,7 +317,7 @@ static int key_control(int key)//按键控制
 	float roll = 0.0f;//绕x轴逆时针 //单位是弧度
 	float pitch = 0.0f;//绕y轴逆时针  
 	float yaw = 0.0f; //绕z轴逆时针
-	float duration = 0.05f;//持续时间
+	float duration = 10.0f;// 0.05f;//持续时间
 	float throttle = 0.587402f;//刚好抵消重力时的油门
 	float yaw_rate = 0.0f;
 
@@ -268,7 +330,7 @@ static int key_control(int key)//按键控制
 	case 32://空格
 		client.hover();//hover模式
 		printf("hover\n");
-		flag = true;
+		//flag = true;
 		break;
 	case 'w':
 		flag = true;
@@ -307,7 +369,7 @@ static int key_control(int key)//按键控制
 		break;
 	case 'l'://roll x轴逆时针角度
 		flag = true;
-		roll = 0.1;//绕y轴逆时针
+		roll = 0.1f;//绕y轴逆时针
 		throttle = throttle / cos(pitch) / cos(roll);//刚好抵消重力时的油门
 		break;
 	case 2490368://方向键上
