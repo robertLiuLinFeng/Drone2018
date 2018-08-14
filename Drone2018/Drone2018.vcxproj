@@ -111,7 +111,8 @@
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>
+      </SubSystem>
       <AdditionalDependencies>AirLib.lib;MavLinkCom.lib;rpc.lib;yolo_cpp_dll.lib;pthreadVC2.lib;cublas.lib;curand.lib;cudart.lib;$(SolutionDir)OpenCV_install\x64\vc14\lib\*340.lib;$(SolutionDir)OpenCV_install\x64\vc14\lib\*340d.lib;cudnn.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
