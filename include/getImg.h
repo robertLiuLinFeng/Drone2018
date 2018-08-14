@@ -25,7 +25,6 @@ int imageResponse2Mat(ImageResponse image_info, Mat &image_mat)
 		{
 			// -- 取出深度值
 			data = image_info.image_data_float.data()[i*image_info.width + j];
-			
 			image_mat.at<ushort>(i,j) = (int)data;
 			//if (i == image_info.height / 2 && j == image_info.width / 2)
 			//{
