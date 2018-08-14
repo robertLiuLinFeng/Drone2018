@@ -198,7 +198,6 @@ void get_img(void)
 // 分割线 ***************************************************************************************************
 
 
-
 		switch (flag_mode)//任务1和任务2
 		{
 		default:
@@ -209,8 +208,6 @@ void get_img(void)
 			
 			break;
 		}
-
-
 
 
 	}
@@ -230,9 +227,12 @@ struct control_cmd {
 struct control_cmd control_cmdset;
 bool flag_H = false;//指示顶高是否完成，ture表示定高完成
 //设置控制命令
-void set_control_cmd(bool flag_enable=true, int flag_move=0, float pitch = .0f, float roll = .0f,
-					 float inclination = .0f, float orientation = .0f, float duration=0.05f, 
-					 float set_H = .0f, float yaw_rate = 0.0f)
+//void set_control_cmd(bool flag_enable=true, int flag_move=0, float pitch = .0f, float roll = .0f,
+//					 float inclination = .0f, float orientation = .0f, float duration=0.05f, 
+//					 float set_H = .0f, float yaw_rate = 0.0f)
+void set_control_cmd(bool flag_enable, int flag_move, float pitch, float roll,
+					 float inclination, float orientation, float duration,
+					 float set_H, float yaw_rate)
 {
 	g_mutex_control_cmd.lock();//加锁
 
@@ -269,6 +269,9 @@ void move_control(void)//移动控制线程
 		{
 			return;
 		}
+
+		
+		
 		g_mutex_control_cmd.lock();//加锁
 		control_cmdset_temp.flag_enable		= control_cmdset.flag_enable;
 		control_cmdset_temp.flag_move		= control_cmdset.flag_move;
@@ -291,12 +294,19 @@ void move_control(void)//移动控制线程
 				client.hover();//hover
 				break;
 			case 1://1是pitch/roll模式移动
-				throttle = throttle / cos(control_cmdset_temp.pitch) / cos(control_cmdset_temp.roll);
+				client.hover();//hover
+				throttle = 0.587402f / cos(control_cmdset_temp.pitch) / cos(control_cmdset_temp.roll);
 				client.moveByAngleThrottle(control_cmdset_temp.pitch, control_cmdset_temp.roll, throttle, control_cmdset_temp.yaw_rate, control_cmdset_temp.duration);
 				break;
 			case 2://2是inclination / orientation模式移动
 				break;
 			case 3://3是设定高度
+				client.hover();//hover
+				// 控制高度函数();
+				//
+				//
+				//
+				//
 				break;
 			}
 		}
@@ -317,7 +327,7 @@ static int key_control(int key)//按键控制
 	float roll = 0.0f;//绕x轴逆时针 //单位是弧度
 	float pitch = 0.0f;//绕y轴逆时针  
 	float yaw = 0.0f; //绕z轴逆时针
-	float duration = 10.0f;// 0.05f;//持续时间
+	float duration = 0.05f;//持续时间
 	float throttle = 0.587402f;//刚好抵消重力时的油门
 	float yaw_rate = 0.0f;
 
@@ -341,36 +351,25 @@ static int key_control(int key)//按键控制
 		throttle -= 0.1f;
 		break;
 	case 'a'://旋转时会下降...
-		flag = true;
-		yaw_rate = -0.7f;
+		set_control_cmd(true, 1, .0f, .0f, .0f, .0f, 0.05f, .0f, -0.7f);
 		break;
 	case 'd':
-		flag = true;
-		yaw_rate = 0.7f;
+		set_control_cmd(true, 1, .0f, .0f, .0f, .0f, 0.05f, .0f, 0.7f);
 		break;
 
 	//下面是以机头方向前后左右
 	case 'i'://pitch y轴逆时针角度
-		flag = true;
-		pitch = -0.1f;//绕y轴逆时针
-		throttle = throttle/cos(pitch)/cos(roll);//刚好抵消重力时的油门
+		set_control_cmd(true, 1, -0.1f, .0f, .0f, .0f, 0.05f, .0f, .0f);
 		break;
 	case 'k'://pitch y轴逆时针角度
-		flag = true;
-		pitch = 0.1f;//绕y轴逆时针
-		throttle = throttle / cos(pitch) / cos(roll);//刚好抵消重力时的油门
+		set_control_cmd(true, 1, 0.1f, .0f, .0f, .0f, 0.05f, .0f, .0f);
 
 		break;
 	case 'j'://roll x轴逆时针角度
-		flag = true;
-		roll = -0.1f;//绕y轴逆时针
-		throttle = throttle / cos(pitch) / cos(roll);//刚好抵消重力时的油门
-
+		set_control_cmd(true, 1, .0f, -0.1f, .0f, .0f, 0.05f, .0f, .0f);
 		break;
 	case 'l'://roll x轴逆时针角度
-		flag = true;
-		roll = 0.1f;//绕y轴逆时针
-		throttle = throttle / cos(pitch) / cos(roll);//刚好抵消重力时的油门
+		set_control_cmd(true, 1, .0f, 0.1f, .0f, .0f, 0.05f, .0f, .0f);
 		break;
 	case 2490368://方向键上
 		throttle += 0.0003f;
@@ -385,12 +384,12 @@ static int key_control(int key)//按键控制
 	default:
 		break;
 	}
+
 	if (flag)
 	{
 		flag = false;
 		client.moveByAngleThrottle(pitch, roll, throttle, yaw_rate, duration);
 	}
-	
 	key_value_cv = -1;
 	return 0;
 }
