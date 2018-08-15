@@ -51,9 +51,9 @@ double PID::PIDXY(double error, double v_max, bool is_X) {
 	return control;
 }
 
-double PID::PIDZ(double reference, double tolerance) {
+double PID::PIDZ(double reference, double tolerance,double kp) {
   double upd, control_stuff;
-  double kp =  0.1;
+  //double kp =  0.1;
 
   ////用GPS数据定高
   //control_stuff = GPS_data.altitude;

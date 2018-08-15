@@ -50,7 +50,8 @@ public:
 	double PID::PIDX(double error, double x_max, double tolerance);
 	double PID::PIDY(double error, double y_max, double tolerance);
 	double PIDXY(double error, double v_max, bool is_X = true);
-	double PID::PIDZ(double reference, double tolerance);
+	//double PID::PIDZ(double reference, double tolerance);
+	double PID::PIDZ(double reference, double tolerance, double kp);
 	double PID::PIDdis(double reference, double tolerance, uint16_t distance);
 	void PIDReset();
 private:

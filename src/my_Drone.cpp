@@ -47,6 +47,8 @@ cv::Mat front_image, down_image, depth_image;
 
 // V 共享函数 ****************************************
 
+
+
 // A 共享函数 ****************************************//
 
 
@@ -218,7 +220,6 @@ struct control_cmd {
 	float duration = .05f;				//持续时间
 	float set_H = .0f;//设定高度
 	float yaw_rate = 0.0f;
-
 };//放头文件里
 
 struct control_cmd control_cmdset;
@@ -326,6 +327,9 @@ static int key_control(int key)//按键控制
 	float throttle = 0.587402f;//刚好抵消重力时的油门
 	float yaw_rate = 0.0f;
 
+	////llf---测试变量
+	float target_altitude;
+
 	bool flag = false;//为真时执行控制函数
 	switch (key)
 	{
@@ -381,8 +385,12 @@ static int key_control(int key)//按键控制
 		break;
 
 	//llf增加的测试语句
+	case '7':
+		target_altitude = Barometer_data.altitude;
+		target_altitude += 0.5;
+		controlAltitude(target_altitude, 1);
+		break;
 	case '8':
-		float target_altitude;
 		int mode, set_altitude_result;
 		cout << "please input target_altitude , mode :";
 		cin >> target_altitude;
@@ -424,8 +432,8 @@ void get_sensor(void)//获取传感器数据
 		//更新传感器数据
 		g_mutex_sensor.lock();//传感器数据锁
 		Barometer_data = client.getBarometerdata();
-		Magnetometer_data = client.getMagnetometerdata();
-		Imu_data = client.getImudata();
+		//Magnetometer_data = client.getMagnetometerdata();
+		//Imu_data = client.getImudata();
 		g_mutex_sensor.unlock();//传感器数据锁释放	
 	}
 }

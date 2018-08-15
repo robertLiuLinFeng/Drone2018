@@ -25,13 +25,14 @@ mode---定高方式：1表示精调   2表示粗调
 int setAltitude(float target_altitude, int mode)
 {
 	int result_set_attlitude = 1;
-	float allowable_error;	//允许的误差
+	float allowable_error, pre_error;	//允许的误差，前一次调整的误差
 	float current_error;	//cirrent_error=target_attlitude-current_attlitude
+	double kp = 0.1;
 	PID PID_temp;
 
 	if (mode == 1)
 	{
-		allowable_error = 1.0;
+		allowable_error = 0.2;
 	}
 	else
 	{
@@ -39,24 +40,32 @@ int setAltitude(float target_altitude, int mode)
 	}
 
 	//最多执行20次，否则异常退出
-	int i = 0;
+	current_error= target_altitude - Barometer_data.altitude;	//调整前的误差
+	pre_error = current_error;
+
 	while(true)
 	{
-		std::cout << "第" << (i++) << "次adjust altitude" << endl;
-		current_error = target_altitude - Barometer_data.altitude;
-
 		if (abs(current_error) < allowable_error)
 		{
 			result_set_attlitude = 0;
 			break;
 		}
 
-		//控制高度
-		double throttle_increment = PID_temp.PIDZ(target_altitude, allowable_error);	//得到的throttle_increment是加速度
-		if (throttle_increment > allowable_error*0.1 || throttle_increment < (-allowable_error*0.1))
+		//根据误差调整PID参数
+		if (abs(current_error) < (abs(pre_error)))
 		{
-			client.moveByAngleThrottle(0.0f, 0.0f, 0.5875 + throttle_increment, 0.0f, 0.7f);
+			kp -= 0.004;
 		}
+
+		//控制高度
+		double throttle_increment = PID_temp.PIDZ(target_altitude, allowable_error, kp);	//得到的throttle_increment是加速度
+		//if (throttle_increment > allowable_error*0.1 || throttle_increment < (-allowable_error*0.1))
+		//{
+			client.moveByAngleThrottle(0.0f, 0.0f, 0.5875 + throttle_increment, 0.0f, 0.5f);
+		//}
+
+		pre_error = current_error;
+		current_error = target_altitude - Barometer_data.altitude;
 	}
 
 	return result_set_attlitude;
