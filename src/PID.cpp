@@ -5,9 +5,9 @@
 //会使得四轴摆动幅度太大。在低点调节得到的参数，在高点上使用没什么问题，就是
 //慢了一点。
 //double kp = -0.01, ki = 0.0, kd = 0.0;// -445高度下的OK。-450高度时，这个参数幅度太大会偏。
-double kp = -0.002, ki = -0.0, kd = 0.00001;//-450高度下的。OK -0.00002;
 //double kp = -0.01, ki = 0.0, kd = 0.0;//OK
 
+double kp = -0.002, ki = -0.0, kd = 0.00001;//-450高度下的。OK -0.00002;
 double vkp = -0.01, vki = 0, vkd = 0;
 
 double PID::PIDY(double error, double y_max, double tolerance)
@@ -27,6 +27,7 @@ double PID::PIDY(double error, double y_max, double tolerance)
 	printf("control_pitch;%f\n", control_pitch);
 	return control_pitch;
 }
+
 double PID::PIDX(double error, double x_max, double tolerance) {
 	double control_roll;
 
@@ -50,18 +51,13 @@ double PID::PIDXY(double error, double v_max, bool is_X) {
 	return control;
 }
 
-
-
 double PID::PIDZ(double reference, double tolerance) {
   double upd, control_stuff;
   double kp =  0.1;
 
-  
-  //获取圆形标识牌的半径
-  //control_stuff = find_rob_.getGroundCenterRadius();
-
   ////用GPS数据定高
   //control_stuff = GPS_data.altitude;
+
   //用气压计定高
   control_stuff = Barometer_data.altitude;
 
@@ -113,13 +109,13 @@ double PID::PIDdis(double reference, double tolerance, uint16_t distance )//refe
 	return fb;
 }
 
+
 //GPS
 //double kp_g = -1282.2, ki_g = -0.0, kd_g = 0.0;//
 //double kp_g = -1000, ki_g = -0.0, kd_g = -350.0;//50ms定高
 //double kp_g = -500, ki_g = -0.0, kd_g = -350.0;//粗调
 //double kp_g = -150, ki_g = -0.0, kd_g = -250.0;//可以用，就是慢
 double kp_g = -150, ki_g = -0.0, kd_g = -250;//可以用，就是慢
-
 double vkp_g = -0.01, vki_g = 0, vkd_g = 0;
 void PID_GPS::PIDReset()
 {
