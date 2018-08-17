@@ -1,6 +1,9 @@
 #include "PID.h"
 #include "Drone_data.h"
 
+//声明要使用的全局变量
+extern msr::airlib::MultirotorRpcLibClient client;
+
 //不同高度PID用的不一样，在比较高的地方调参得到的参数，在低点使用时，可能
 //会使得四轴摆动幅度太大。在低点调节得到的参数，在高点上使用没什么问题，就是
 //慢了一点。
@@ -59,7 +62,8 @@ double PID::PIDZ(double reference, double tolerance,double kp) {
   //control_stuff = GPS_data.altitude;
 
   //用气压计定高
-  control_stuff = Barometer_data.altitude;
+  //control_stuff = Barometer_data.altitude;
+  control_stuff = client.getBarometerdata().altitude;
 
   if (control_stuff < reference) {
     upd = kp * (reference - control_stuff);

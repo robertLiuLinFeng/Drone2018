@@ -1,4 +1,5 @@
 #include "main.hpp"
+#include <string>
 //airsim
 #include "vehicles/multirotor/api/MultirotorRpcLibClient.hpp"
 #include "api/RpcLibClientBase.hpp"
@@ -12,6 +13,7 @@
 #include <thread>
 #include "getImg.h" //深度图处理
 #include "Set_Altitude.h"
+#include "rotate.h"
 
 
 //命名空间
@@ -25,7 +27,7 @@ typedef ImageCaptureBase::ImageType ImageType;			//图像类型
 
 // V 共享变量 ****************************************
 //airsim 相关
-msr::airlib::MultirotorRpcLibClient client("localhost", 41451, 60000);//连接localhost:41451 	
+	msr::airlib::MultirotorRpcLibClient client("localhost", 41451, 60000);//连接localhost:41451 	
 //传感器数据
 //GpsData			 GPS_data;			//GPS
 BarometerData	 Barometer_data;	//气压计
@@ -43,14 +45,17 @@ cv::Mat front_image, down_image, depth_image;
 
 // A 共享变量 ****************************************//
 
-
+//llf
+int num = 2143;
+std::string pathName;
+int step = 1, back_step = 1, back_border=0;
+int interval_num = 0;
 
 // V 共享函数 ****************************************
 
 
 
 // A 共享函数 ****************************************//
-
 
 //线程
 //创建可等候定时器
@@ -139,10 +144,10 @@ void Key_Scan(void)
 		{
 			cv::imshow("DOWN", down_image);
 		}
-		if (!depth_image.empty())
+		/*if (!depth_image.empty())
 		{
 			cv::imshow("FROWARD_DEPTH", depth_image);
-		}
+		}*/
 		g_mutex_img.unlock();//释放锁
 
 		key_value_cv = cv::waitKeyEx(1);//读取按键
@@ -165,7 +170,7 @@ void get_img(void)
 		//等待定时器时间到达
 		WaitForSingleObject(hTimer_get_img, INFINITE);
 
-		time_1 = clock();
+		time_1 = clock();   
 		if (flag_exit)//退出线程
 		{
 			return;
@@ -177,6 +182,7 @@ void get_img(void)
 			g_mutex_img.lock();//获得锁
 			front_image = cv::imdecode(response.at(0).image_data_uint8, cv::IMREAD_COLOR);	//;前视图
 			down_image = cv::imdecode(response.at(2).image_data_uint8, cv::IMREAD_COLOR);	//下视图	
+
 			//深度图
 			depth_image = Mat(response.at(1).height, response.at(1).width, CV_16UC1);
 			// 转换深度图获得浮点数的深度图
@@ -188,24 +194,110 @@ void get_img(void)
 		//printf("    get_img耗时:%d ms\n", clock() - time_1);
 
 // 分割线 ***************************************************************************************************
-
-
 		switch (flag_mode)//任务1和任务2
 		{
 		default:
-		case 1://任务1 钻圈
-			
+		case 1:		//任务1 钻圈
 			//调用 钻圈函数();
 			break;
-		case 2://任务2 小树林
+		case 2:		//从10非到角落
+		{
+			border_img b_flag;
+			int h_flag = 1;
+
+			switch (step)
+			{
+			case 1:
+				//定高到18
+				while (h_flag)
+					h_flag = setAltitude(20.0, 1);
+				h_flag = 1;
+				//std::this_thread::sleep_for(std::chrono::duration<double>(3.0f));
+				sleep(3);
+				step = 2;
+				break;
+			case 2:
+				turn180();
+				//std::this_thread::sleep_for(std::chrono::duration<double>(6.0f));
+				sleep(7);
+				step = 3;
+				break;
+			case 3:	
+				set_control_cmd(true, 1, 1, 0.1f, .0f, .0f, .0f, 0.25f, .0f, .0f);
+				b_flag = border_dectection_task2(down_image);
+				if (b_flag.bottom == 1)
+				{
+					//定高到16
+					while (h_flag)
+						h_flag = setAltitude(16.0, 1);
+					h_flag = 1;
+					sleep(3);
+					step = 4;
+					break;
+				}
+				break;
+			case 4:
+				set_control_cmd(true, 1, 1, .0f, 0.1f, .0f, .0f, 0.25f, .0f, .0f);
+				b_flag = border_dectection_task2(down_image);
+				if (b_flag.right == 1)
+				{
+					step = 1;
+					flag_mode = 3;
+					break;
+				}
+				break;
+			}
+		}
+			break;
+		case 3:		//小树林
+
+			break;
+		case 4:		//返回到0号停机坪
+			border_img border_flag;
+			int h_flag = 1;
+
+			interval_num++;
+			if (interval_num >= 20)		//每检测一段时间定一次高
+			{
+				back_step = 1;
+				interval_num = 0;
+			}
 			
-			//调用 小树林搜索函数();
+			switch (back_step)
+			{
+			case 1:
+				//定高到18
+				while (h_flag)
+					h_flag = setAltitude(20.0, 1);
+				h_flag = 1;
+				sleep(3);
+				if (back_border == 1)	//如果到了返回的边界，调到第三步
+					back_step = 3;
+				else
+					back_step = 2;
+				break;
+
+			case 2:
+				set_control_cmd(true, 1, 1, -0.1f, .0f, .0f, .0f, 0.3f, .0f, .0f);
+				border_flag = border_dectection_task2(down_image);
+				if (border_flag.left == 1)
+					set_control_cmd(true, 1, 1, .0f, -0.1f, .0f, .0f, 0.05f, .0f, .0f);
+
+				if(border_flag.right==1)
+					set_control_cmd(true, 1, 1, .0f, 0.1f, .0f, .0f, 0.05f, .0f, .0f);
+
+				if (border_flag.top == 1)
+					back_step = 3;
+				break;
+
+			case 3:
+				//TODO	降落到0号停机坪
+				break;
+			}
+
 			break;
 		}
-
-
-	}
-	
+	}	
 }
 
 struct control_cmd {
@@ -267,8 +359,6 @@ void move_control(void)//移动控制线程
 			return;
 		}
 
-		
-		
 		g_mutex_control_cmd.lock();//加锁
 		control_cmdset_temp.flag_enable		= control_cmdset.flag_enable;
 		control_cmdset_temp.flag_move		= control_cmdset.flag_move;
@@ -303,7 +393,9 @@ void move_control(void)//移动控制线程
 				break;
 			case 3://3是设定高度
 				client.hover();//hover
-				setAltitude(control_cmdset_temp.set_H, control_cmdset_temp.flag_set_altitude);
+				int result_set_H=setAltitude(control_cmdset_temp.set_H, control_cmdset_temp.flag_set_altitude);
+				flag_H = result_set_H == 0 ? true : false;
+				cout << "flag_H = " << flag_H << endl;
 				break;
 			}
 		}
@@ -384,9 +476,27 @@ static int key_control(int key)//按键控制
 		printf("throttle=%f\n", throttle);
 		break;
 
+	case '4':
+		//turn180();
+		//flyToCorner();
+		flag_mode = 4;
+		break;
+
+	case '5':
+		target_altitude = client.getBarometerdata().altitude;
+		target_altitude -= 0.5;
+		controlAltitude(target_altitude, 1);
+		break;
+
+	case '6':
+		pathName = "E:\\2018届高分无人机比赛相关\\图片集\\" + to_string(num++) + ".jpg";
+		cv::imwrite(pathName, front_image);
+		cout << "num = " << num << endl;
+		break;
+
 	//llf增加的测试语句
 	case '7':
-		target_altitude = Barometer_data.altitude;
+		target_altitude = client.getBarometerdata().altitude;
 		target_altitude += 0.5;
 		controlAltitude(target_altitude, 1);
 		break;
@@ -400,7 +510,10 @@ static int key_control(int key)//按键控制
 		//cout << "set_altitude_result = " << set_altitude_result << endl;
 		break;
 	case '9':
-		cout << "current_altitude = " << Barometer_data.altitude << endl;
+		cout << "current_altitude = " << client.getBarometerdata().altitude << endl;
+		break;
+	case '0':
+		cout << "降落结果 --- " << land() << endl;
 		break;
 	default:
 		break;
@@ -430,11 +543,11 @@ void get_sensor(void)//获取传感器数据
 		}
 
 		//更新传感器数据
-		g_mutex_sensor.lock();//传感器数据锁
-		Barometer_data = client.getBarometerdata();
+		//g_mutex_sensor.lock();//传感器数据锁
+		//Barometer_data = client.getBarometerdata();
 		//Magnetometer_data = client.getMagnetometerdata();
 		//Imu_data = client.getImudata();
-		g_mutex_sensor.unlock();//传感器数据锁释放	
+		//g_mutex_sensor.unlock();//传感器数据锁释放	
 	}
 }
 

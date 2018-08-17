@@ -41,5 +41,14 @@
     <ClInclude Include="..\include\Set_Altitude.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\rotate.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\border_detection_task24.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\timer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

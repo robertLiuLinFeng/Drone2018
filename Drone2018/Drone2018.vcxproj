@@ -129,9 +129,12 @@
     <ClCompile Include="..\src\wgs_conversions\wgs_conversions.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\include\border_detection_task24.h" />
     <ClInclude Include="..\include\PID.h" />
     <ClInclude Include="..\include\PIDController.h" />
+    <ClInclude Include="..\include\rotate.h" />
     <ClInclude Include="..\include\Set_Altitude.h" />
+    <ClInclude Include="..\include\timer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
